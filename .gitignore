@@ -1,0 +1,13 @@
+.env
+*firebase_config.json
+
+.hg
+.hgignore
+.idea
+.idea/*
+*.orig
+*venv/*
+*.venv/*
+db.sqlite3
+*.pyc
+*__pycacahe__*

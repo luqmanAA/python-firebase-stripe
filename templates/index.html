@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>My Subscription App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Firebase (compat) -->
+    <script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-auth-compat.js"></script>
+    <script>
+        const firebaseConfig = {
+            apiKey: "{{ firebase_api_key }}",
+            authDomain: "{{ firebase_auth_domain }}",
+            projectId: "{{ firebase_project_id }}"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+    </script>
+</head>
+<body class="bg-gradient-to-br from-gray-100 to-gray-200 min-h-screen flex flex-col items-center justify-center p-4">
+
+    <div class="w-full max-w-3xl bg-white rounded-3xl shadow-2xl p-10 space-y-6">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-2">🔥 My Subscription App</h1>
+        <p class="text-center text-gray-600 mb-6">Demo with FastAPI + Firebase + Stripe</p>
+
+        <!-- Not logged in -->
+        <div id="logged-out" class="hidden flex flex-col items-center space-y-4">
+            <p class="text-gray-700 text-lg">Please sign in to continue:</p>
+            <button id="google-login-btn" onclick="login()"
+                class="flex items-center gap-3 w-full max-w-sm border border-gray-300 rounded-xl px-6 py-3 text-gray-700 font-semibold shadow hover:bg-gray-50 transition">
+                <img id="google-logo" src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" class="w-6 h-6">
+                <span id="google-btn-text">Sign in with Google</span>
+                <svg id="google-loading" class="hidden animate-spin h-5 w-5 text-gray-500 ml-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a12 12 0 00-12 12h4z"></path>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Logged in -->
+        <div id="logged-in" class="hidden flex flex-col items-center space-y-6">
+            <p class="text-gray-700 text-lg">Welcome, <span id="user-email" class="font-semibold"></span></p>
+            <div class="flex gap-4">
+                <button id="subscribe-btn" onclick="subscribe()"
+                    class="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-6 rounded-xl shadow-md transition">
+                    <span id="subscribe-text">Buy Subscription</span>
+                    <svg id="subscribe-loading" class="hidden animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a12 12 0 00-12 12h4z"></path>
+                    </svg>
+                </button>
+                <button onclick="logout()" class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-6 rounded-xl shadow-md transition">
+                    Logout
+                </button>
+            </div>
+
+            <!-- Subscription list -->
+            <div id="subscriptions" class="w-full mt-6 space-y-4">
+                <h2 class="text-xl font-bold text-gray-800">Your Subscriptions</h2>
+
+                <!-- Loading state -->
+                <div id="subscription-loading" class="flex items-center gap-2 text-gray-500">
+                    <svg class="animate-spin h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a12 12 0 00-12 12h4z"></path>
+                    </svg>
+                    <span>Loading subscriptions...</span>
+                </div>
+
+                <div id="subscription-list" class="flex flex-col gap-3 hidden">
+                    <!-- Filled dynamically via JS -->
+                </div>
+                <div id="no-subscriptions" class="flex flex-col gap-3 hidden">
+                    <p class="text-gray-500">You have no active subscriptions.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Auth state listener
+        auth.onAuthStateChanged(async (user) => {
+            if (user) {
+                document.getElementById("logged-out").classList.add("hidden");
+                document.getElementById("logged-in").classList.remove("hidden");
+                document.getElementById("user-email").innerText = user.displayName;
+
+                // Fetch subscriptions
+                const idToken = await user.getIdToken();
+                fetchSubscriptions(idToken);
+
+            } else {
+                document.getElementById("logged-in").classList.add("hidden");
+                document.getElementById("logged-out").classList.remove("hidden");
+            }
+        });
+
+        // Fetch subscriptions and update the UI
+        async function fetchSubscriptions(idToken) {
+            const loadingDiv = document.getElementById("subscription-loading");
+            const list = document.getElementById("subscription-list");
+            const noSub = document.getElementById("no-subscriptions");
+
+            loadingDiv.classList.remove("hidden");
+            list.classList.add("hidden");
+            noSub.classList.add("hidden");
+
+            try {
+                const res = await fetch(`/me/subscription?id_token=${idToken}`, {
+                    method: "GET",
+                    headers: { "Authorization": "Bearer " + idToken },
+                });
+                const data = await res.json();
+
+                list.innerHTML = "";
+                console.log(data.subscription)
+                if (data.subscription) {
+                    const sub = data.subscription;
+                    const card = document.createElement("div");
+                    card.className = "bg-gray-50 rounded-xl p-4 shadow flex justify-between items-center";
+                    card.innerHTML = `
+                        <div>
+                            <p class="font-semibold text-gray-800">${sub.plan}</p>
+                            <p class="text-gray-500 text-sm">Status: ${sub.status}</p>
+                            <p class="text-gray-500 text-sm">Ends: ${new Date(sub.current_period_end * 1000).toLocaleDateString()}</p>
+                        </div>
+                    `;
+                    list.appendChild(card);
+                } else {
+                    console.log("no sub");
+                    list.classList.remove("hidden");
+                    noSub.classList.remove("hidden");
+                }
+            } catch (err) {
+                console.error("Failed to fetch subscriptions", err);
+                noSub.classList.remove("hidden");
+            } finally {
+                loadingDiv.classList.add("hidden");
+                list.classList.remove("hidden");
+            }
+        }
+
+        // Login
+        async function login() {
+            const btn = document.getElementById("google-login-btn");
+            const logo = document.getElementById("google-logo");
+            const text = document.getElementById("google-btn-text");
+            const loading = document.getElementById("google-loading");
+
+            btn.disabled = true;
+            logo.classList.add("hidden");
+            text.textContent = "Signing in...";
+            loading.classList.remove("hidden");
+
+            try {
+                const provider = new firebase.auth.GoogleAuthProvider();
+                const result = await auth.signInWithPopup(provider);
+                const idToken = await result.user.getIdToken();
+
+                await fetch("/verify-token/", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ id_token: idToken })
+                });
+            } catch (err) {
+                alert("Login failed: " + err.message);
+            } finally {
+                btn.disabled = false;
+                logo.classList.remove("hidden");
+                text.textContent = "Sign in with Google";
+                loading.classList.add("hidden");
+            }
+
+        }
+
+        // Logout
+        async function logout() {
+            await auth.signOut();
+        }
+
+        // Stripe Checkout
+        async function subscribe() {
+            const btn = document.getElementById("subscribe-btn");
+            const text = document.getElementById("subscribe-text");
+            const loading = document.getElementById("subscribe-loading");
+
+            btn.disabled = true;
+            text.textContent = "Processing...";
+            loading.classList.remove("hidden");
+
+            const user = auth.currentUser;
+            if (!user) {
+                alert("Please log in first.");
+                resetButton();
+                return;
+            }
+
+            try {
+                const res = await fetch("/create-checkout-session", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ id_token: await user.getIdToken() })
+                });
+                const data = await res.json();
+                if (data.url) {
+                    window.location.href = data.url;
+                } else {
+                    alert("Error: " + JSON.stringify(data));
+                    resetButton();
+                }
+            } catch (err) {
+                alert("Subscription failed: " + err.message);
+                resetButton();
+            }
+
+            function resetButton() {
+                btn.disabled = false;
+                text.textContent = "Buy Subscription";
+                loading.classList.add("hidden");
+            }
+        }
+    </script>
+
+    <script src="https://js.stripe.com/v3/"></script>
+    <script>
+        const STRIPE_PUBLISHABLE_KEY = "{{ publishable_key }}";
+    </script>
+</body>
+</html>
