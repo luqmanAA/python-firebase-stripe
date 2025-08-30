@@ -30,7 +30,6 @@ A demo subscription web application built with **FastAPI**, **Firebase Authentic
 ```
 project-root/
 │
-├─ app.py
 │
 ├─ firebase/
 │   ├─ __init__.py
@@ -41,8 +40,13 @@ project-root/
 │   ├─ subscriptions.html
 │   ├─ success.html
 │   └─ cancel.html
+├
+├─ app.py
+├─ routes.py
+├─ services.py
 │
 ├─ .env.example
+├─ Procfile
 ├─ requirements.txt
 └─ README.md
 ```
