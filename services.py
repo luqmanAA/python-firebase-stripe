@@ -70,6 +70,6 @@ class SubscriptionService:
         db = firestore.client()
         doc = db.collection("users").document(user["uid"]).get()
         if not doc.exists:
-            return {"subscription": []}
+            return {"subscription": None}
 
         return {"subscription": doc.to_dict().get("subscription")}
